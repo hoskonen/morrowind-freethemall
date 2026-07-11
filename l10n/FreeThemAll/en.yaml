@@ -1,0 +1,8 @@
+page_name: "Free Them All"
+page_description: "Configure Free Them All."
+
+group_name: "General"
+group_description: "General mod settings."
+
+enabled_name: "Enable Free Them All"
+enabled_description: "Automatically frees other eligible slaves after one slave is freed normally."

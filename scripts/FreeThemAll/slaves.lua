@@ -61,26 +61,19 @@ local function freeAdditionalSlaves(options)
     )
 
     local globals = world.mwscript.getGlobalVariables(options.player)
-    local numberToFree = math.min(options.maxAdditionalSlaves, #candidates)
     local freedCount = 0
 
-    for index = 1, numberToFree do
+    for index = 1, #candidates do
         local target = candidates[index]
         local script = getSlaveScript(target)
 
         if script and script.variables.slavestatus == 0 then
             script.variables.slavestatus = 3
 
-            -- Prevent an automatically freed slave from becoming a new trigger.
-            options.previousStatuses[target.id] = 3
+            globals.freedslavescounter =
+                globals.freedslavescounter + 1
 
-            globals.freedslavescounter = globals.freedslavescounter + 1
             freedCount = freedCount + 1
-
-            print(
-                '[FreeThemAll] Automatically freed slave: '
-                .. target.recordId
-            )
         end
     end
 

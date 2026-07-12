@@ -1,2 +1,3 @@
 MENU: scripts/FreeThemAll/settingsMenu.lua
+PLAYER: scripts/FreeThemAll/player.lua
 GLOBAL: scripts/FreeThemAll/global.lua

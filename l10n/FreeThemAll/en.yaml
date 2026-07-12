@@ -6,3 +6,6 @@ group_description: "General mod settings."
 
 enabled_name: "Enable Free Them All"
 enabled_description: "Automatically frees other eligible slaves after one slave is freed normally."
+
+debug_name: "Debug logging"
+debug_description: "Writes detailed Free Them All diagnostic information to openmw.log."

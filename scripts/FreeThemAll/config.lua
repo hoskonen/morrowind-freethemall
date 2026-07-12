@@ -18,6 +18,13 @@ interfaces.Settings.registerGroup {
             description = 'enabled_description',
             default = true,
         },
+        {
+            key = 'debug',
+            renderer = 'checkbox',
+            name = 'debug_name',
+            description = 'debug_description',
+            default = false,
+        },
     },
 }
 
@@ -33,12 +40,14 @@ local excludedTriggers = {
 }
 
 return {
-    maxAdditionalSlaves = 1,
-
     excludedTargets = excludedTargets,
     excludedTriggers = excludedTriggers,
 
     isEnabled = function()
         return settings:get('enabled') ~= false
+    end,
+
+    isDebugEnabled = function()
+        return settings:get('debug') == true
     end,
 }

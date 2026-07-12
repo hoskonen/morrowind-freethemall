@@ -3,18 +3,12 @@ local world = require('openmw.world')
 local config = require('scripts/FreeThemAll/config')
 local slaves = require('scripts/FreeThemAll/slaves')
 
-local CHECK_INTERVAL = 0.25
-
-local elapsed = 0
 local player = nil
-local previousStatuses = {}
-local loggedSlaves = {}
+local processedActors = {}
 
-local function showMessage(message)
-    if player then
-        player:sendEvent('ShowMessage', {
-            message = message,
-        })
+local function debugLog(message)
+    if config.isDebugEnabled() then
+        print('[FreeThemAll] ' .. message)
     end
 end
 
@@ -23,120 +17,116 @@ local function getFreedSlavesCounter()
     return globals.freedslavescounter
 end
 
-local function checkSlaves()
-    for _, actor in ipairs(world.activeActors) do
-        local script = slaves.getSlaveScript(actor)
+local function onTryBatchRelease(data)
+    local actor = data.actor
 
-        if script then
-            local currentStatus = script.variables.slavestatus
+    if not actor then
+        debugLog('Dialogue event did not contain an actor.')
+        return
+    end
 
-            if not loggedSlaves[actor.id] then
-                loggedSlaves[actor.id] = true
+    -- Prevent duplicate processing if the same dialogue response is
+    -- emitted more than once.
+    if processedActors[actor.id] then
+        debugLog(
+            'Ignoring duplicate release event for '
+            .. actor.recordId
+        )
+        return
+    end
 
-                print(
-                    '[FreeThemAll] Found slave: actor='
-                    .. actor.recordId
-                    .. ', script='
-                    .. script.recordId
-                    .. ', status='
-                    .. tostring(currentStatus)
-                )
-            end
+    local script = slaves.getSlaveScript(actor)
 
-            local previousStatus = previousStatuses[actor.id]
+    if not script then
+        debugLog(
+            'Go free response came from non-standard slave: '
+            .. actor.recordId
+        )
+        return
+    end
 
-            -- Always track the transition, even while the mod is disabled.
-            previousStatuses[actor.id] = currentStatus
+    local currentStatus = script.variables.slavestatus
 
-            if previousStatus ~= nil
-                and previousStatus ~= 3
-                and currentStatus == 3
-            then
-                if not config.isEnabled() then
-                    print(
-                        '[FreeThemAll] Manual release detected while disabled: '
-                        .. actor.recordId
-                    )
-                    return
-                end
+    -- This also verifies that the player chose the actual unlock response,
+    -- rather than merely opening the "go free" topic.
+    if currentStatus ~= 3 then
+        debugLog(
+            'Go free response observed before release for '
+            .. actor.recordId
+            .. ', slaveStatus='
+            .. tostring(currentStatus)
+        )
+        return
+    end
 
-                if config.excludedTriggers[actor.recordId] then
-                    print(
-                        '[FreeThemAll] Special trigger skipped: '
-                        .. actor.recordId
-                    )
-                    return
-                end
+    processedActors[actor.id] = true
 
-                local counterBefore = getFreedSlavesCounter()
+    if not config.isEnabled() then
+        debugLog(
+            'Manual release detected while disabled: '
+            .. actor.recordId
+        )
+        return
+    end
 
-                local freedCount, eligibleCount = slaves.freeAdditionalSlaves {
-                    freedSlave = actor,
-                    player = player,
-                    previousStatuses = previousStatuses,
-                    excludedTargets = config.excludedTargets,
-                    maxAdditionalSlaves = config.maxAdditionalSlaves,
-                }
+    if config.excludedTriggers[actor.recordId] then
+        debugLog(
+            'Special trigger skipped: '
+            .. actor.recordId
+        )
+        return
+    end
 
-                local counterAfter = getFreedSlavesCounter()
+    local counterBefore = getFreedSlavesCounter()
 
-                print(
-                    '[FreeThemAll] Manual slave detected: '
-                    .. actor.recordId
-                    .. ', eligible additional slaves='
-                    .. tostring(eligibleCount)
-                    .. ', automatically freed='
-                    .. tostring(freedCount)
-                    .. ', counter before auto-free='
-                    .. tostring(counterBefore)
-                    .. ', counter after auto-free='
-                    .. tostring(counterAfter)
-                )
+    local freedCount, eligibleCount =
+        slaves.freeAdditionalSlaves {
+            freedSlave = actor,
+            player = player,
+            excludedTargets = config.excludedTargets,
+        }
 
-                if freedCount == 1 then
-                    showMessage('Free Them All: freed 1 additional slave.')
-                elseif freedCount > 1 then
-                    showMessage(
-                        'Free Them All: freed '
-                        .. tostring(freedCount)
-                        .. ' additional slaves.'
-                    )
-                end
+    local counterAfter = getFreedSlavesCounter()
 
-                return
-            end
-        end
+    debugLog(
+        'Manual slave detected: '
+        .. actor.recordId
+        .. ', eligible additional slaves='
+        .. tostring(eligibleCount)
+        .. ', automatically freed='
+        .. tostring(freedCount)
+        .. ', counter before auto-free='
+        .. tostring(counterBefore)
+        .. ', counter after auto-free='
+        .. tostring(counterAfter)
+    )
+
+    if freedCount > 0 then
+        player:sendEvent(
+            'FreeThemAll_QueueNotification',
+            {
+                count = freedCount + 1,
+            }
+        )
     end
 end
 
 local function onPlayerAdded(addedPlayer)
     player = addedPlayer
-    previousStatuses = {}
-    loggedSlaves = {}
+    processedActors = {}
 
-    print('[FreeThemAll] Global script is running')
-    print(
-        '[FreeThemAll] FreedSlavesCounter at load='
+    debugLog(
+        'Global script loaded. FreedSlavesCounter='
         .. tostring(getFreedSlavesCounter())
     )
-
-    showMessage('Free Them All: script loaded successfully')
-end
-
-local function onUpdate(dt)
-    elapsed = elapsed + dt
-
-    if elapsed < CHECK_INTERVAL then
-        return
-    end
-
-    elapsed = elapsed - CHECK_INTERVAL
-    checkSlaves()
 end
 
 return {
     engineHandlers = {
         onPlayerAdded = onPlayerAdded,
-        onUpdate = onUpdate,
+    },
+
+    eventHandlers = {
+        FreeThemAll_TryBatchRelease = onTryBatchRelease,
     },
 }
